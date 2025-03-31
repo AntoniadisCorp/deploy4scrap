@@ -1,0 +1,41 @@
+# flyctl launch added from .gitignore
+# Ignore fibers logs
+**\fiber.log
+
+# Ignore go mod cache
+# go.mod
+
+# ignore .env
+**\.env
+
+# Ignore gobuild
+**\build
+
+# Ignore go sum files
+# *go.sum
+
+# Ignore .idea
+**\.idea
+
+# Ignore .vscode
+**\.vscode
+
+# Ignore .git
+**\.git
+
+**\*.log
+
+# Server Keys
+**\*.Key
+**\*.crt
+
+# Cql file
+**\*.cql
+
+# ignore tmp folder
+tmp
+**\config_.json
+**\config.json
+fly.toml
+
+*.csv

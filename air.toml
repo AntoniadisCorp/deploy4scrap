@@ -1,0 +1,20 @@
+# Config file for Air live reloading
+
+# Root directory of the project
+root = "."
+
+# Watching these file extensions
+[build]
+  bin = "tmp/main"  # Temporary binary location
+  cmd = "go run main.go"  # Command to run the app
+  exclude_dir = ["vendor", "node_modules", "tmp", "bin"]  # Exclude unnecessary directories
+  include_ext = ["go", "tpl", "tmpl", "html", "css", "env"]  # Watch these file types
+  exclude_ext = ["md", "log"]  # Ignore logs and markdown files
+
+[log]
+  level = "debug"
+
+[serve]
+  # Run the compiled binary
+  cmd = "tmp/main"
+  watch_delay = 1000 # Time delay in milliseconds

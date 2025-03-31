@@ -1,0 +1,54 @@
+# Binaries & Build Files
+/build/
+/bin/
+*.exe
+*.out
+*.o
+
+# Go Modules & Dependencies
+/go/pkg/
+/go/bin/
+vendor/
+
+# Configuration & Secrets
+# ignore .env
+**\.env
+fly.toml
+
+# Logs & Temporary Files
+*.log
+*.tmp
+/tmp/
+cache/
+
+# Ignore go sum files
+# *go.sum
+
+# Ignore .idea
+.idea/
+
+# Ignore .vsc
+
+# Ignore fibers logs
+fiber.log
+
+# IDE & Editor Specific
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# ignore firestore credentials
+*libnet*.json
+
+# Server Keys
+*.Key
+*.crt
+
+# Cql file
+*.cql
+
+# csv file
+*.csv
+
+*.ssh
