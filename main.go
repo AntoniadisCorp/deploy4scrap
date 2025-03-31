@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -9,6 +10,7 @@ import (
 
 	firebase "firebase.google.com/go"
 	"firebase.google.com/go/auth"
+	"github.com/ansrivas/fiberprometheus/v2"
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
 	"github.com/valyala/fasthttp"
@@ -35,10 +37,14 @@ func init() {
 
 	flyApiToken = os.Getenv("FLY_API_TOKEN")
 	flyApp = os.Getenv("FLY_APP")
+	flyFirebaseCreds, err := storeSecretFirebaseCredsAsFile()
 
+	if err != nil {
+		log.Fatalf("Error storing Firebase credentials: %v", err)
+	}
 	var options []option.ClientOption
 
-	options = append(options, option.WithCredentialsFile("libnet-d76db-949683c2222d.json"))
+	options = append(options, option.WithCredentialsFile(flyFirebaseCreds))
 
 	app, err := firebase.NewApp(ctx, nil, options...)
 	if err != nil {
@@ -198,10 +204,44 @@ func flyRequest(method string, url string, body interface{}) (map[string]interfa
 	return responseData, nil
 }
 
+func storeSecretFirebaseCredsAsFile() (string, error) {
+	// Get the secret from environment variables
+	encodedCreds := os.Getenv("FIREBASE_CREDENTIALS")
+	if encodedCreds == "" {
+		fmt.Println("FIREBASE_CREDENTIALS not set")
+		return "", fmt.Errorf("FIREBASE_CREDENTIALS not set")
+	}
+
+	// Decode Base64
+	decoded, err := base64.StdEncoding.DecodeString(encodedCreds)
+	if err != nil {
+		fmt.Println("Error decoding Firebase credentials:", err)
+		return "", fmt.Errorf("Error decoding Firebase credentials: %v", err)
+	}
+
+	// Save as a JSON file
+	filePath := "/tmp/" + os.Getenv("FILE_FIREBASE_CREDENTIALS")
+	err = os.WriteFile(filePath, decoded, 0644)
+	if err != nil {
+		fmt.Println("Error writing Firebase credentials file:", err)
+		return "", fmt.Errorf("Error writing Firebase credentials file: %v", err)
+	}
+
+	fmt.Println("Firebase credentials saved at:", filePath)
+
+	return filePath, nil
+
+}
+
 func main() {
 	app := fiber.New()
 
 	app.Use(authMiddleware)
+	prometheus := fiberprometheus.New("deploy4scrap")
+
+	prometheus.RegisterAt(app, "/metrics")
+	prometheus.SetSkipPaths([]string{"/ping"}) // Optional: Remove some paths from metrics
+	app.Use(prometheus.Middleware)
 
 	app.Post("/deploy", deployMachine)
 	app.Put("/machine/:id/start", startMachine)
