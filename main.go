@@ -59,6 +59,12 @@ func init() {
 
 // Middleware to verify Firebase JWT Token
 func authMiddleware(c fiber.Ctx) error {
+
+	// Ignore authentication for / and /metrics paths
+	if c.Path() == "/" || c.Path() == "/metrics" {
+		return c.Next()
+	}
+
 	token := c.Get("Authorization")
 	token = token[len("Bearer "):]
 
@@ -85,7 +91,7 @@ func deployMachine(c fiber.Ctx) error {
 
 	if clone && masterId != "" {
 		machine, err := getMachineDetails(masterId)
-		log.Println("Machine:", machine)
+		// log.Println("Machine:", machine)
 
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
@@ -106,7 +112,7 @@ func deployMachine(c fiber.Ctx) error {
 		}
 	}
 
-	log.Println("Config:", config)
+	// log.Println("Config:", config)
 
 	machine, err := flyRequest("POST", fmt.Sprintf("%s/apps/%s/machines", flyApiUrl, flyApp), config)
 	if err != nil {
@@ -251,17 +257,17 @@ func Welcome(c fiber.Ctx) error {
 func main() {
 	app := fiber.New()
 
-	// app.Use(authMiddleware)
+	// Create a group for authenticated routes
+	authedApp := app.Group("/", authMiddleware)
 
-	app.Post("/deploy", deployMachine)
-	app.Put("/machine/:id/start", startMachine)
-	app.Put("/machine/:id/stop", stopMachine)
-	app.Delete("/machine/:id", deleteMachine)
-	// app.Post("/execute-task/:machine_id", executeTask)
+	authedApp.Post("/deploy", deployMachine)
+	authedApp.Put("/machine/:id/start", startMachine)
+	authedApp.Put("/machine/:id/stop", stopMachine)
+	authedApp.Delete("/machine/:id", deleteMachine)
+	// authedApp.Post("/execute-task/:machine_id", executeTask)
 
+	// Routes that don't require authentication
 	app.Get("/", Welcome)
-
-	// Initialize default config (Assign the middleware to /metrics)
 	app.Get("/metrics", monitor.New(monitor.Config{Title: "Deploy4Scrap Metrics Page"}))
 
 	log.Fatal(app.Listen(":" + os.Getenv("PORT")))
