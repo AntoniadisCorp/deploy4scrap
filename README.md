@@ -14,8 +14,8 @@ Deploy4Scrap is a Go Fiber API that automates deploying, scaling, and managing F
 
 1. **Clone the Repository**
    ```sh
-   git clone https://github.com/your-username/deploy-manager.git
-   cd deploy-manager
+   git clone https://github.com/AntoniadisCorp/deploy4scrap.git
+   cd deploy4scrap
    ```
 2. **Set Up Environment Variables**
    ```sh
