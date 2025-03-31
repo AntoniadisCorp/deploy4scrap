@@ -10,8 +10,8 @@ import (
 
 	firebase "firebase.google.com/go"
 	"firebase.google.com/go/auth"
-	"github.com/ansrivas/fiberprometheus/v2"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/contrib/monitor"
+	"github.com/gofiber/fiber/v3"
 	"github.com/joho/godotenv"
 	"github.com/valyala/fasthttp"
 	"google.golang.org/api/option"
@@ -58,7 +58,7 @@ func init() {
 }
 
 // Middleware to verify Firebase JWT Token
-func authMiddleware(c *fiber.Ctx) error {
+func authMiddleware(c fiber.Ctx) error {
 	token := c.Get("Authorization")
 	token = token[len("Bearer "):]
 
@@ -76,7 +76,7 @@ func authMiddleware(c *fiber.Ctx) error {
 }
 
 // 🚀 Deploy Machine (Clone or New)
-func deployMachine(c *fiber.Ctx) error {
+func deployMachine(c fiber.Ctx) error {
 
 	clone := c.Query("clone") == "true"
 	masterId := c.Query("master_id")
@@ -125,7 +125,7 @@ func getMachineDetails(machineId string) (map[string]interface{}, error) {
 }
 
 // 🚀 Start Machine
-func startMachine(c *fiber.Ctx) error {
+func startMachine(c fiber.Ctx) error {
 	machineId := c.Params("id")
 	_, err := flyRequest("POST", fmt.Sprintf("%s/apps/%s/machines/%s/start", flyApiUrl, flyApp, machineId), nil)
 	if err != nil {
@@ -135,7 +135,7 @@ func startMachine(c *fiber.Ctx) error {
 }
 
 // 🚀 Stop Machine
-func stopMachine(c *fiber.Ctx) error {
+func stopMachine(c fiber.Ctx) error {
 	machineId := c.Params("id")
 	_, err := flyRequest("POST", fmt.Sprintf("%s/apps/%s/machines/%s/stop", flyApiUrl, flyApp, machineId), nil)
 	if err != nil {
@@ -145,7 +145,7 @@ func stopMachine(c *fiber.Ctx) error {
 }
 
 // 🚀 Delete Machine
-func deleteMachine(c *fiber.Ctx) error {
+func deleteMachine(c fiber.Ctx) error {
 	machineId := c.Params("id")
 	_, err := flyRequest("DELETE", fmt.Sprintf("%s/apps/%s/machines/%s", flyApiUrl, flyApp, machineId), nil)
 	if err != nil {
@@ -155,7 +155,7 @@ func deleteMachine(c *fiber.Ctx) error {
 }
 
 // 🚀 Execute Task on Running Machine
-func executeTask(c *fiber.Ctx) error {
+func executeTask(c fiber.Ctx) error {
 	machineId := c.Params("machine_id")
 	machine, err := getMachineDetails(machineId)
 
@@ -208,8 +208,19 @@ func storeSecretFirebaseCredsAsFile() (string, error) {
 	// Get the secret from environment variables
 	encodedCreds := os.Getenv("FIREBASE_CREDENTIALS")
 	if encodedCreds == "" {
-		fmt.Println("FIREBASE_CREDENTIALS not set")
-		return "", fmt.Errorf("FIREBASE_CREDENTIALS not set")
+		_, err := os.Open(os.Getenv("FILE_FIREBASE_CREDENTIALS"))
+		if err != nil {
+			if os.IsNotExist(err) {
+				fmt.Println("File does not exist")
+			} else {
+				log.Fatal(err)
+			}
+
+			fmt.Println("FIREBASE_CREDENTIALS not set")
+			return "", fmt.Errorf("FIREBASE_CREDENTIALS not set")
+		}
+
+		return os.Getenv("FILE_FIREBASE_CREDENTIALS"), nil
 	}
 
 	// Decode Base64
@@ -233,21 +244,25 @@ func storeSecretFirebaseCredsAsFile() (string, error) {
 
 }
 
+func Welcome(c fiber.Ctx) error {
+	return c.SendString("Welcome to the Deploy4Scrap API!")
+}
+
 func main() {
 	app := fiber.New()
 
-	app.Use(authMiddleware)
-	prometheus := fiberprometheus.New("deploy4scrap")
-
-	prometheus.RegisterAt(app, "/metrics")
-	prometheus.SetSkipPaths([]string{"/ping"}) // Optional: Remove some paths from metrics
-	app.Use(prometheus.Middleware)
+	// app.Use(authMiddleware)
 
 	app.Post("/deploy", deployMachine)
 	app.Put("/machine/:id/start", startMachine)
 	app.Put("/machine/:id/stop", stopMachine)
 	app.Delete("/machine/:id", deleteMachine)
 	// app.Post("/execute-task/:machine_id", executeTask)
+
+	app.Get("/", Welcome)
+
+	// Initialize default config (Assign the middleware to /metrics)
+	app.Get("/metrics", monitor.New(monitor.Config{Title: "Deploy4Scrap Metrics Page"}))
 
 	log.Fatal(app.Listen(":" + os.Getenv("PORT")))
 }
