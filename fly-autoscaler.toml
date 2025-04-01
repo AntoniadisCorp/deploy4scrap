@@ -12,8 +12,8 @@ FAS_PROMETHEUS_METRIC_NAME = "queue_depth"
 FAS_PROMETHEUS_QUERY = "sum(queue_depth{app='$APP_NAME'})"
 
 FAS_APP_NAME = "deploy4scrap"
-FAS_MIN_CREATED_MACHINE_COUNT = "min(1, queue_depth / 10 - 1)"
-FAS_MAX_CREATED_MACHINE_COUNT = "min(10, queue_depth / 10 + 1)"
+FAS_MIN_CREATED_MACHINE_COUNT = "min(1, queue_depth / 10 - 1)"  # Original line
+FAS_MAX_CREATED_MACHINE_COUNT = "min(10, queue_depth / 10 + 1)" # Original line
 # FAS_CREATED_MACHINE_COUNT = "min(10, queue_depth / 2)"
 FAS_INITIAL_MACHINE_STATE = "stopped"
 FAS_MAX_MACHINE_COUNT = "max(10, min(10, queue_depth * 2))"

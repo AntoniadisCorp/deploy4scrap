@@ -22,6 +22,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/valyala/fasthttp"
+	"github.com/valyala/fasthttp/reuseport"
 	"go.uber.org/zap"
 	"google.golang.org/api/option"
 )
@@ -274,7 +275,7 @@ func Welcome(c *fiber.Ctx) error {
 
 func main() {
 	app := fiber.New(fiber.Config{
-		Prefork: false, // Enable prefork mode for better performance
+		Prefork: true, // Enable prefork mode for better performance
 		// Concurrency: ,   // Set the desired concurrency level
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
@@ -299,6 +300,12 @@ func main() {
 	// Start Metrics server
 	app.Get("/metrics", monitor.New(monitor.Config{Title: "Deploy4Scrap Metrics Page"}))
 
+	listener, err := reuseport.Listen("tcp4", "0.0.0.0"+addr)
+	if err != nil {
+		log.Fatalf("Failed to listen on port 3401 with SO_REUSEPORT: %v", err)
+	}
+	defer listener.Close()
+
 	// Graceful shutdown
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -313,7 +320,7 @@ func main() {
 	go func() {
 		slog.Info("serving metrics", slog.String("addr", addr))
 		http.Handle("/metrics", promhttp.Handler())
-		if err := http.ListenAndServe(addr, nil); err != nil {
+		if err := http.Serve(listener, nil); err != nil {
 			log.Fatal(err)
 		}
 	}()
