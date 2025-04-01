@@ -1,0 +1,20 @@
+app = "deploy4scrap-autoscaler"
+
+[build]
+image = "flyio/fly-autoscaler:0.3"
+
+
+[env]
+FAS_PROMETHEUS_ADDRESS = "https://api.fly.io/prometheus/prokopis123-gmail-com/"
+FAS_REGIONS = "ord,ewr,fra"
+FAS_PROMETHEUS_METRIC_NAME = "queue_depth"
+FAS_PROMETHEUS_QUERY = "sum(queue_depth{app='$APP_NAME'})"
+
+FAS_APP_NAME = "deploy4scrap"
+FAS_CREATED_MACHINE_COUNT = "min(50, queue_depth / 2)"
+FAS_INITIAL_MACHINE_STATE = "stopped"
+# FAS_MAX_MACHINE_COUNT = "min(50, qdepth * 2)"
+
+[metrics]
+port = 9090
+path = "/metrics"

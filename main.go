@@ -6,14 +6,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	firebase "firebase.google.com/go"
 	"firebase.google.com/go/auth"
+	"github.com/AntoniadisCorp/deploy4scrap/fly"
 	"github.com/gofiber/contrib/monitor"
 	"github.com/gofiber/fiber/v3"
 	"github.com/joho/godotenv"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/valyala/fasthttp"
+	"go.uber.org/zap"
 	"google.golang.org/api/option"
 )
 
@@ -27,6 +34,8 @@ var firebaseAuth *auth.Client
 var flyApiToken string
 var flyApp string
 var flyApiUrl = "https://api.machines.dev/v1"
+
+const addr = ":9090"
 
 func init() {
 	ctx := context.Background()
@@ -268,7 +277,51 @@ func main() {
 
 	// Routes that don't require authentication
 	app.Get("/", Welcome)
+
+	// Start Metrics server
 	app.Get("/metrics", monitor.New(monitor.Config{Title: "Deploy4Scrap Metrics Page"}))
 
-	log.Fatal(app.Listen(":" + os.Getenv("PORT")))
+	// Graceful shutdown
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Channel to listen for interrupt signals
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	go fly.Walk()
+
+	// Start Metrics server
+	go func() {
+		slog.Info("serving metrics", slog.String("addr", addr))
+		http.Handle("/metrics", promhttp.Handler())
+		if err := http.ListenAndServe(addr, nil); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	// Start deploy4scrap MicroService
+	go func() {
+		log.Println("Starting deploy4scrap microservice on ", zap.String("port", os.Getenv("PORT")))
+		if err := app.Listen(":" + os.Getenv("PORT")); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	<-ctx.Done()
+	log.Println("Shutting down server...")
+
+	// Shutdown Fiber app
+	if err := app.Shutdown(); err != nil {
+		log.Fatal("Failed to shutdown server", zap.Error(err))
+	}
+
+	log.Println("deploy4scrap MicroService gracefully stopped")
+
+	// Wait for an interrupt signal
+	<-sigCh
+
+	log.Println("Shutting metrics Server...")
+
 }

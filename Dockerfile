@@ -43,6 +43,8 @@ RUN apk -U upgrade \
 
 # EXPOSE PORT 8080
 EXPOSE 8080
+# EXPOSE PORT 9090 for metrics
+EXPOSE 9090
 
 # Run the binary
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
