@@ -10,13 +10,15 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+	"time"
 
 	firebase "firebase.google.com/go"
 	"firebase.google.com/go/auth"
 	"github.com/AntoniadisCorp/deploy4scrap/fly"
-	"github.com/gofiber/contrib/monitor"
-	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/monitor"
 	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/valyala/fasthttp"
@@ -67,7 +69,8 @@ func init() {
 }
 
 // Middleware to verify Firebase JWT Token
-func authMiddleware(c fiber.Ctx) error {
+// Middleware to verify Firebase JWT Token
+func authMiddleware(c *fiber.Ctx) error {
 
 	// Ignore authentication for / and /metrics paths
 	if c.Path() == "/" || c.Path() == "/metrics" {
@@ -75,7 +78,13 @@ func authMiddleware(c fiber.Ctx) error {
 	}
 
 	token := c.Get("Authorization")
-	token = token[len("Bearer "):]
+
+	// Check if the token starts with "Bearer "
+	if strings.HasPrefix(token, "Bearer ") {
+		token = token[7:] // Extract token
+	} else {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token format"})
+	}
 
 	if token == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Missing token"})
@@ -91,7 +100,7 @@ func authMiddleware(c fiber.Ctx) error {
 }
 
 // 🚀 Deploy Machine (Clone or New)
-func deployMachine(c fiber.Ctx) error {
+func deployMachine(c *fiber.Ctx) error {
 
 	clone := c.Query("clone") == "true"
 	masterId := c.Query("master_id")
@@ -140,7 +149,7 @@ func getMachineDetails(machineId string) (map[string]interface{}, error) {
 }
 
 // 🚀 Start Machine
-func startMachine(c fiber.Ctx) error {
+func startMachine(c *fiber.Ctx) error {
 	machineId := c.Params("id")
 	_, err := flyRequest("POST", fmt.Sprintf("%s/apps/%s/machines/%s/start", flyApiUrl, flyApp, machineId), nil)
 	if err != nil {
@@ -150,7 +159,7 @@ func startMachine(c fiber.Ctx) error {
 }
 
 // 🚀 Stop Machine
-func stopMachine(c fiber.Ctx) error {
+func stopMachine(c *fiber.Ctx) error {
 	machineId := c.Params("id")
 	_, err := flyRequest("POST", fmt.Sprintf("%s/apps/%s/machines/%s/stop", flyApiUrl, flyApp, machineId), nil)
 	if err != nil {
@@ -160,7 +169,7 @@ func stopMachine(c fiber.Ctx) error {
 }
 
 // 🚀 Delete Machine
-func deleteMachine(c fiber.Ctx) error {
+func deleteMachine(c *fiber.Ctx) error {
 	machineId := c.Params("id")
 	_, err := flyRequest("DELETE", fmt.Sprintf("%s/apps/%s/machines/%s", flyApiUrl, flyApp, machineId), nil)
 	if err != nil {
@@ -170,7 +179,7 @@ func deleteMachine(c fiber.Ctx) error {
 }
 
 // 🚀 Execute Task on Running Machine
-func executeTask(c fiber.Ctx) error {
+func executeTask(c *fiber.Ctx) error {
 	machineId := c.Params("machine_id")
 	machine, err := getMachineDetails(machineId)
 
@@ -259,12 +268,21 @@ func storeSecretFirebaseCredsAsFile() (string, error) {
 
 }
 
-func Welcome(c fiber.Ctx) error {
+func Welcome(c *fiber.Ctx) error {
 	return c.SendString("Welcome to the Deploy4Scrap API!")
 }
 
 func main() {
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		Prefork: false, // Enable prefork mode for better performance
+		// Concurrency: ,   // Set the desired concurrency level
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
+		IdleTimeout:    30 * time.Second,
+		BodyLimit:      4 * 1024 * 1024, // 4 MB
+		ReadBufferSize: 16 * 1024,       // 16 KB,
+		// Views:          engine,          // Set View Engine
+	})
 
 	// Create a group for authenticated routes
 	authedApp := app.Group("/", authMiddleware)
@@ -302,7 +320,7 @@ func main() {
 
 	// Start deploy4scrap MicroService
 	go func() {
-		log.Println("Starting deploy4scrap microservice on ", zap.String("port", os.Getenv("PORT")))
+		log.Println("Starting deploy4scrap microservice on ", os.Getenv("PORT"))
 		if err := app.Listen(":" + os.Getenv("PORT")); err != nil {
 			log.Fatal(err)
 		}
