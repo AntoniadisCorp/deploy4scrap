@@ -8,7 +8,8 @@ Deploy4Scrap is a Go Fiber API that automates deploying, scaling, and managing F
 - Start, stop, and delete machines
 - Execute tasks on running machines
 - Firebase JWT authentication
-- Prometheus metrics for fly auto-scaling
+- Prometheus metrics for fly auto-scaling based on active requests and queue depth
+- Autoscaling based on CPU and memory usage
 
 ## Installation
 
@@ -40,5 +41,13 @@ Deploy4Scrap is a Go Fiber API that automates deploying, scaling, and managing F
 | PUT    | `/machine/:id/stop`     | Stop a machine          |
 | DELETE | `/machine/:id`          | Delete a machine        |
 | POST   | `/execute-task/:id`     | Run a task on a machine |
+
+## Autoscaling Configuration
+
+The autoscaler is configured to monitor the following metrics:
+
+- **Active Requests**: Scales up when active requests exceed 70% of machine capacity.
+- **Queue Depth**: Monitors the queue depth to determine when to add more machines.
+- **CPU and Memory Usage**: Scales based on CPU and memory thresholds.
 
 ---

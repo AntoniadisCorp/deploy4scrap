@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -16,11 +14,9 @@ import (
 
 	firebase "firebase.google.com/go"
 	"firebase.google.com/go/auth"
-	"github.com/AntoniadisCorp/deploy4scrap/fly"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/monitor"
 	"github.com/joho/godotenv"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/valyala/fasthttp"
 	"github.com/valyala/fasthttp/reuseport"
 	"go.uber.org/zap"
@@ -314,16 +310,16 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
-	go fly.Walk()
+	// go fly.Walk()
 
 	// Start Metrics server
-	go func() {
+	/* go func() {
 		slog.Info("serving metrics", slog.String("addr", addr))
 		http.Handle("/metrics", promhttp.Handler())
 		if err := http.Serve(listener, nil); err != nil {
 			log.Fatal(err)
 		}
-	}()
+	}() */
 
 	// Start deploy4scrap MicroService
 	go func() {
