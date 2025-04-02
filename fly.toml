@@ -1,0 +1,71 @@
+# fly.toml app configuration file generated for deploy4scrap on 2025-04-01T17:42:29+03:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'deploy4scrap'
+primary_region = 'iad'
+
+[build]
+dockerfile = 'Dockerfile'
+
+[env]
+FILE_FIREBASE_CREDENTIALS = 'libnet-d76db-949683c2222d.json'
+FLY_APP = 'deepcrawlqueue'
+PORT = '8080'
+SERVER_ADRESS = '0.0.0.0'
+
+# [http_response]
+# protocol = 'tcp'
+# # force_https = true
+# internal_port = 8080
+# auto_stop_machines = 'stop'
+# auto_start_machines = true
+# min_machines_running = 0
+# processes = ['app']
+
+[[services]]
+protocol = 'tcp'
+internal_port = 8080
+# force_https = true
+auto_stop_machines = 'stop'
+auto_start_machines = true
+min_machines_running = 0
+processes = ['app']
+
+[[services.ports]]
+port = 80
+handlers = ['http']
+
+[[services.ports]]
+port = 443
+handlers = ['tls', 'http']
+
+[services.concurrency]
+type = 'connections' # Scale based on concurrent connections
+hard_limit = 200     # Max connections per Machine before rejection
+soft_limit = 150     # Target connections before routing to other Machines
+
+[[services]]
+protocol = 'tcp'
+internal_port = 9090
+
+[[services.ports]]
+port = 9090
+handlers = ['http']
+
+[services.concurrency]
+type = "connections"
+hard_limit = 25
+soft_limit = 20
+
+[[vm]]
+memory = "512mb"
+cpu_kind = 'shared'
+cpus = 2
+
+
+[[metrics]]
+port = 9090
+path = '/metrics'
+https = false

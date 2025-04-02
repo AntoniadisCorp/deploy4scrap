@@ -1,0 +1,26 @@
+app = "deploy4scrap-autoscaler"
+
+[build]
+image = "flyio/fly-autoscaler:0.3"
+
+[env]
+FAS_APP_NAME = "deploy4scrap"
+FAS_PROMETHEUS_ADDRESS = "https://api.fly.io/prometheus/prokopis123-gmail-com/"
+FAS_REGIONS = "iad,syd,ams,nrt" # "ord,iad,dfw,gru,bog,syd,fra,ams,cdg,nrt,sin,bom"
+FAS_PROMETHEUS_METRIC_NAME = "response_time"
+
+# FAS_PROMETHEUS_QUERY = "rate(fly_app_http_response_time_seconds_sum{app='$APP_NAME'}[5m]) / rate(fly_app_http_response_time_seconds_count{app='$APP_NAME'}[5m])"
+# FAS_PROMETHEUS_QUERY = "histogram_quantile(0.95, sum(rate(fly_app_http_response_time_seconds_bucket{app='$APP_NAME'}[2m])) by (le))"
+FAS_PROMETHEUS_QUERY = "response_time"
+
+FAS_MIN_CREATED_MACHINE_COUNT = "max(1, ceil((response_time - 0.2) / 0.1))"  # 1 Machine unless response_time > 0.2s
+
+# Number of Machines to keep started (fast scaling when > 0.2s)
+FAS_MAX_CREATED_MACHINE_COUNT = "min(10, max(1, ceil((response_time - 0.2) / 0.05 + 1)))"  # Aggressive scaling above 0.2s
+
+FAS_INITIAL_MACHINE_STATE = "stopped"
+FAS_MAX_MACHINE_COUNT = "10"
+
+[metrics]
+port = 9090
+path = "/metrics"

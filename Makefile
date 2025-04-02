@@ -1,4 +1,5 @@
-.PHONY: set-firebase-secret
+.PHONY: set-firebase-secret set-fly-api-token
+
 # Include the environment file if it exists
 -include .env
 
@@ -11,3 +12,8 @@ set-firebase-secret:
 	@[ -f $(FILE_FIREBASE_CREDENTIALS) ] || { echo "Error: Firebase JSON file not found at $(FILE_FIREBASE_CREDENTIALS)"; exit 1; }
 	@flyctl secrets set FIREBASE_CREDENTIALS="$$(base64 < $(FILE_FIREBASE_CREDENTIALS))"
 	@echo "✅ Firebase credentials set successfully!"
+
+set-fly-api-token:
+	@echo "Setting Fly.io API token..."
+	@flyctl secrets set FLY_API_TOKEN="$$(flyctl auth token)"
+	@echo "✅ Fly.io API token set successfully!"

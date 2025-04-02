@@ -3,17 +3,25 @@ package main
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/goccy/go-json"
 
 	firebase "firebase.google.com/go"
 	"firebase.google.com/go/auth"
-	"github.com/gofiber/contrib/monitor"
-	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/healthcheck"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
+	"github.com/gofiber/fiber/v2/middleware/monitor"
 	"github.com/joho/godotenv"
 	"github.com/valyala/fasthttp"
+	"go.uber.org/zap"
 	"google.golang.org/api/option"
 )
 
@@ -27,6 +35,8 @@ var firebaseAuth *auth.Client
 var flyApiToken string
 var flyApp string
 var flyApiUrl = "https://api.machines.dev/v1"
+
+const addr = ":9090"
 
 func init() {
 	ctx := context.Background()
@@ -58,7 +68,8 @@ func init() {
 }
 
 // Middleware to verify Firebase JWT Token
-func authMiddleware(c fiber.Ctx) error {
+// Middleware to verify Firebase JWT Token
+func authMiddleware(c *fiber.Ctx) error {
 
 	// Ignore authentication for / and /metrics paths
 	if c.Path() == "/" || c.Path() == "/metrics" {
@@ -66,7 +77,13 @@ func authMiddleware(c fiber.Ctx) error {
 	}
 
 	token := c.Get("Authorization")
-	token = token[len("Bearer "):]
+
+	// Check if the token starts with "Bearer "
+	if strings.HasPrefix(token, "Bearer ") {
+		token = token[7:] // Extract token
+	} else {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token format"})
+	}
 
 	if token == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Missing token"})
@@ -82,7 +99,7 @@ func authMiddleware(c fiber.Ctx) error {
 }
 
 // 🚀 Deploy Machine (Clone or New)
-func deployMachine(c fiber.Ctx) error {
+func deployMachine(c *fiber.Ctx) error {
 
 	clone := c.Query("clone") == "true"
 	masterId := c.Query("master_id")
@@ -131,7 +148,7 @@ func getMachineDetails(machineId string) (map[string]interface{}, error) {
 }
 
 // 🚀 Start Machine
-func startMachine(c fiber.Ctx) error {
+func startMachine(c *fiber.Ctx) error {
 	machineId := c.Params("id")
 	_, err := flyRequest("POST", fmt.Sprintf("%s/apps/%s/machines/%s/start", flyApiUrl, flyApp, machineId), nil)
 	if err != nil {
@@ -141,7 +158,7 @@ func startMachine(c fiber.Ctx) error {
 }
 
 // 🚀 Stop Machine
-func stopMachine(c fiber.Ctx) error {
+func stopMachine(c *fiber.Ctx) error {
 	machineId := c.Params("id")
 	_, err := flyRequest("POST", fmt.Sprintf("%s/apps/%s/machines/%s/stop", flyApiUrl, flyApp, machineId), nil)
 	if err != nil {
@@ -151,7 +168,7 @@ func stopMachine(c fiber.Ctx) error {
 }
 
 // 🚀 Delete Machine
-func deleteMachine(c fiber.Ctx) error {
+func deleteMachine(c *fiber.Ctx) error {
 	machineId := c.Params("id")
 	_, err := flyRequest("DELETE", fmt.Sprintf("%s/apps/%s/machines/%s", flyApiUrl, flyApp, machineId), nil)
 	if err != nil {
@@ -161,7 +178,7 @@ func deleteMachine(c fiber.Ctx) error {
 }
 
 // 🚀 Execute Task on Running Machine
-func executeTask(c fiber.Ctx) error {
+func executeTask(c *fiber.Ctx) error {
 	machineId := c.Params("machine_id")
 	machine, err := getMachineDetails(machineId)
 
@@ -250,12 +267,29 @@ func storeSecretFirebaseCredsAsFile() (string, error) {
 
 }
 
-func Welcome(c fiber.Ctx) error {
+func Welcome(c *fiber.Ctx) error {
 	return c.SendString("Welcome to the Deploy4Scrap API!")
 }
 
 func main() {
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		Prefork: true, // Enable prefork mode for better performance
+		// Concurrency:    100,  // Set the desired concurrency level
+		JSONEncoder:    json.Marshal,
+		JSONDecoder:    json.Unmarshal,
+		ReadTimeout:    15 * time.Second,
+		WriteTimeout:   15 * time.Second,
+		IdleTimeout:    60 * time.Second,
+		BodyLimit:      4 * 1024 * 1024, // 4 MB
+		ReadBufferSize: 16 * 1024,       // 16 KB, or // 4 KB
+		// Views:          engine,          // Set View Engine
+	})
+
+	// Provide a minimal config
+	app.Use(healthcheck.New())
+
+	// Initialize default config
+	app.Use(limiter.New())
 
 	// Create a group for authenticated routes
 	authedApp := app.Group("/", authMiddleware)
@@ -268,7 +302,57 @@ func main() {
 
 	// Routes that don't require authentication
 	app.Get("/", Welcome)
+
+	// Start Metrics server
 	app.Get("/metrics", monitor.New(monitor.Config{Title: "Deploy4Scrap Metrics Page"}))
 
-	log.Fatal(app.Listen(":" + os.Getenv("PORT")))
+	/* listener, err := reuseport.Listen("tcp4", "0.0.0.0"+addr)
+	if err != nil {
+		log.Fatalf("Failed to listen on port 3401 with SO_REUSEPORT: %v", err)
+	}
+	defer listener.Close() */
+
+	// Graceful shutdown
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Channel to listen for interrupt signals
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	/* go fly.WalkResponse()
+
+	// Start Metrics server
+	go func() {
+		slog.Info("serving metrics", slog.String("addr", addr))
+		http.Handle("/metrics", promhttp.Handler())
+		if err := http.Serve(listener, nil); err != nil {
+			log.Fatal(err)
+		}
+	}() */
+
+	// Start deploy4scrap MicroService
+	go func() {
+		log.Println("Starting deploy4scrap microservice on ", os.Getenv("PORT"))
+		if err := app.Listen(":" + os.Getenv("PORT")); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	<-ctx.Done()
+	log.Println("Shutting down server...")
+
+	// Shutdown Fiber Server App
+	if err := app.Shutdown(); err != nil {
+		log.Fatal("Failed to shutdown server", zap.Error(err))
+	}
+
+	log.Println("deploy4scrap MicroService gracefully stopped")
+
+	// Wait for an interrupt signal
+	<-sigCh
+
+	log.Println("Shutting metrics Server...")
+
 }
