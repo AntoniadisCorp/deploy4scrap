@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -12,13 +11,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/goccy/go-json"
+
 	firebase "firebase.google.com/go"
 	"firebase.google.com/go/auth"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/healthcheck"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/monitor"
 	"github.com/joho/godotenv"
 	"github.com/valyala/fasthttp"
-	"github.com/valyala/fasthttp/reuseport"
 	"go.uber.org/zap"
 	"google.golang.org/api/option"
 )
@@ -272,14 +274,22 @@ func Welcome(c *fiber.Ctx) error {
 func main() {
 	app := fiber.New(fiber.Config{
 		Prefork: true, // Enable prefork mode for better performance
-		// Concurrency: ,   // Set the desired concurrency level
-		ReadTimeout:    10 * time.Second,
-		WriteTimeout:   10 * time.Second,
-		IdleTimeout:    30 * time.Second,
+		// Concurrency:    100,  // Set the desired concurrency level
+		JSONEncoder:    json.Marshal,
+		JSONDecoder:    json.Unmarshal,
+		ReadTimeout:    15 * time.Second,
+		WriteTimeout:   15 * time.Second,
+		IdleTimeout:    60 * time.Second,
 		BodyLimit:      4 * 1024 * 1024, // 4 MB
-		ReadBufferSize: 16 * 1024,       // 16 KB,
+		ReadBufferSize: 16 * 1024,       // 16 KB, or // 4 KB
 		// Views:          engine,          // Set View Engine
 	})
+
+	// Provide a minimal config
+	app.Use(healthcheck.New())
+
+	// Initialize default config
+	app.Use(limiter.New())
 
 	// Create a group for authenticated routes
 	authedApp := app.Group("/", authMiddleware)
@@ -296,11 +306,11 @@ func main() {
 	// Start Metrics server
 	app.Get("/metrics", monitor.New(monitor.Config{Title: "Deploy4Scrap Metrics Page"}))
 
-	listener, err := reuseport.Listen("tcp4", "0.0.0.0"+addr)
+	/* listener, err := reuseport.Listen("tcp4", "0.0.0.0"+addr)
 	if err != nil {
 		log.Fatalf("Failed to listen on port 3401 with SO_REUSEPORT: %v", err)
 	}
-	defer listener.Close()
+	defer listener.Close() */
 
 	// Graceful shutdown
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -310,10 +320,10 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
-	// go fly.Walk()
+	/* go fly.WalkResponse()
 
 	// Start Metrics server
-	/* go func() {
+	go func() {
 		slog.Info("serving metrics", slog.String("addr", addr))
 		http.Handle("/metrics", promhttp.Handler())
 		if err := http.Serve(listener, nil); err != nil {
@@ -333,7 +343,7 @@ func main() {
 	<-ctx.Done()
 	log.Println("Shutting down server...")
 
-	// Shutdown Fiber app
+	// Shutdown Fiber Server App
 	if err := app.Shutdown(); err != nil {
 		log.Fatal("Failed to shutdown server", zap.Error(err))
 	}

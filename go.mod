@@ -77,6 +77,7 @@ require (
 require (
 	firebase.google.com/go v3.13.0+incompatible
 	github.com/andybalholm/brotli v1.1.1 // indirect
+	github.com/goccy/go-json v0.10.5
 	github.com/gofiber/contrib/monitor v0.1.0
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/joho/godotenv v1.5.1

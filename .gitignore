@@ -13,7 +13,6 @@ vendor/
 # Configuration & Secrets
 # ignore .env
 **\.env
-fly.toml
 
 # Logs & Temporary Files
 *.log
