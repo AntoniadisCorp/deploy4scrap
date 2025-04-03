@@ -16,18 +16,12 @@ PORT = '8080'
 SERVER_ADRESS = '0.0.0.0'
 
 # [http_response]
-# protocol = 'tcp'
-# # force_https = true
-# internal_port = 8080
-# auto_stop_machines = 'stop'
-# auto_start_machines = true
-# min_machines_running = 0
-# processes = ['app']
+
 
 [[services]]
 protocol = 'tcp'
-internal_port = 8080
 # force_https = true
+internal_port = 8080
 auto_stop_machines = 'stop'
 auto_start_machines = true
 min_machines_running = 0
@@ -43,8 +37,8 @@ handlers = ['tls', 'http']
 
 [services.concurrency]
 type = 'connections' # Scale based on concurrent connections
-hard_limit = 150     # Max connections per Machine before rejection
-soft_limit = 100     # Target connections before routing to other Machines
+hard_limit = 25      # Max connections per Machine before rejection
+soft_limit = 20      # Target connections before routing to other Machines
 
 # [[services]]
 # protocol = 'tcp'

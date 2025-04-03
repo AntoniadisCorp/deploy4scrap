@@ -10,11 +10,11 @@ import (
 func Limiter() fiber.Handler {
 
 	limits := limiter.Config{
-		Next: func(c *fiber.Ctx) bool {
-			return c.IP() == "127.0.0.1" || c.IP() == "0.0.0.0"
-		},
+		// Next: func(c *fiber.Ctx) bool {
+		// 	return c.IP() == "127.0.0.1" //  || c.IP() == "0.0.0.0"
+		// },
 		Max:        20,
-		Expiration: 30 * time.Second,
+		Expiration: 20 * time.Second,
 		KeyGenerator: func(c *fiber.Ctx) string {
 			return c.Get("x-forwarded-for")
 		},
