@@ -5,27 +5,19 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
-	"github.com/AntoniadisCorp/deploy4scrap/handlers"
-	"github.com/ansrivas/fiberprometheus/v2"
-	"github.com/goccy/go-json"
-
 	firebase "firebase.google.com/go"
 	"firebase.google.com/go/auth"
+	router "github.com/AntoniadisCorp/deploy4scrap/interfaces/controller"
+	"github.com/AntoniadisCorp/deploy4scrap/interfaces/handlers"
+	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/favicon"
-	"github.com/gofiber/fiber/v2/middleware/filesystem"
-	"github.com/gofiber/fiber/v2/middleware/healthcheck"
-	"github.com/gofiber/fiber/v2/middleware/monitor"
 	"github.com/gofiber/template/html/v2"
 	"github.com/joho/godotenv"
-	"github.com/valyala/fasthttp"
 	"go.uber.org/zap"
 	"google.golang.org/api/option"
 )
@@ -37,6 +29,7 @@ type DeployQuery struct {
 }
 
 var firebaseAuth *auth.Client
+var FirebaseApp *firebase.App
 var flyApiToken string
 var flyApp string
 var flyApiUrl = "https://api.machines.dev/v1"
@@ -61,175 +54,10 @@ func init() {
 
 	options = append(options, option.WithCredentialsFile(flyFirebaseCreds))
 
-	app, err := firebase.NewApp(ctx, nil, options...)
+	FirebaseApp, err = firebase.NewApp(ctx, nil, options...)
 	if err != nil {
 		log.Fatalf("Firebase initialization error: %v", err)
 	}
-
-	firebaseAuth, err = app.Auth(ctx)
-	if err != nil {
-		log.Fatalf("Firebase Auth initialization error: %v", err)
-	}
-}
-
-// Middleware to verify Firebase JWT Token
-// Middleware to verify Firebase JWT Token
-func authMiddleware(c *fiber.Ctx) error {
-
-	// Ignore authentication for / and /metrics paths
-	// if c.Path() == "/" || c.Path() == "/metrics" || c.Path() == "/health" || c.Path() == "/metricsgraph" {
-	// 	return c.Next()
-	// }
-
-	token := c.Get("Authorization")
-
-	// Check if the token starts with "Bearer "
-	if strings.HasPrefix(token, "Bearer ") {
-		token = token[7:] // Extract token
-	} else {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token format"})
-	}
-
-	if token == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Missing token"})
-	}
-
-	decodedToken, err := firebaseAuth.VerifyIDToken(context.Background(), token)
-	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
-	}
-
-	c.Locals("user", decodedToken)
-	return c.Next()
-}
-
-// 🚀 Deploy Machine (Clone or New)
-func deployMachine(c *fiber.Ctx) error {
-
-	clone := c.Query("clone") == "true"
-	masterId := c.Query("master_id")
-
-	var config map[string]interface{}
-
-	if clone && masterId != "" {
-		machine, err := getMachineDetails(masterId)
-		// log.Println("Machine:", machine)
-
-		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
-		}
-		config = map[string]interface{}{
-			"region": machine["region"],
-			"config": machine["config"],
-		}
-	} else {
-		log.Println("no Machine:", masterId)
-		config = map[string]interface{}{
-			"region": "ord",
-			"config": map[string]interface{}{
-				"image":    "registry.fly.io/deepcrawlqueue:deployment-01JMSKTJ0WQ92SHVZFP9REAWH7",
-				"guest":    map[string]interface{}{"cpu_kind": "shared", "cpus": 2, "memory_mb": 2048},
-				"services": []map[string]interface{}{{"internal_port": 8080, "protocol": "tcp"}},
-			},
-		}
-	}
-
-	// log.Println("Config:", config)
-
-	machine, err := flyRequest("POST", fmt.Sprintf("%s/apps/%s/machines", flyApiUrl, flyApp), config)
-	if err != nil {
-		log.Fatalf("Fly Request Error: %v", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-
-	return c.JSON(fiber.Map{"message": "Machine deployed", "machine_id": machine["id"]})
-}
-
-// 🚀 Get Machine IP
-func getMachineDetails(machineId string) (map[string]interface{}, error) {
-	url := fmt.Sprintf("%s/apps/%s/machines/%s", flyApiUrl, flyApp, machineId)
-	log.Println("Get Machine url:", url)
-	return flyRequest("GET", url, nil)
-}
-
-// 🚀 Start Machine
-func startMachine(c *fiber.Ctx) error {
-	machineId := c.Params("id")
-	_, err := flyRequest("POST", fmt.Sprintf("%s/apps/%s/machines/%s/start", flyApiUrl, flyApp, machineId), nil)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-	return c.JSON(fiber.Map{"message": "Machine started"})
-}
-
-// 🚀 Stop Machine
-func stopMachine(c *fiber.Ctx) error {
-	machineId := c.Params("id")
-	_, err := flyRequest("POST", fmt.Sprintf("%s/apps/%s/machines/%s/stop", flyApiUrl, flyApp, machineId), nil)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-	return c.JSON(fiber.Map{"message": "Machine stopped"})
-}
-
-// 🚀 Delete Machine
-func deleteMachine(c *fiber.Ctx) error {
-	machineId := c.Params("id")
-	_, err := flyRequest("DELETE", fmt.Sprintf("%s/apps/%s/machines/%s", flyApiUrl, flyApp, machineId), nil)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-	return c.JSON(fiber.Map{"message": "Machine deleted"})
-}
-
-// 🚀 Execute Task on Running Machine
-func executeTask(c *fiber.Ctx) error {
-	machineId := c.Params("machine_id")
-	machine, err := getMachineDetails(machineId)
-
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-
-	machineIp := machine["private_ip"].(string)
-	taskUrl := fmt.Sprintf("http://%s:8080/run-task", machineIp)
-
-	_, err = flyRequest("POST", taskUrl, nil)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
-	}
-
-	return c.JSON(fiber.Map{"message": "Task executed on cloned machine"})
-}
-
-// 🚀 Helper Function for Fly.io API Requests
-func flyRequest(method string, url string, body interface{}) (map[string]interface{}, error) {
-	req := fasthttp.AcquireRequest()
-	defer fasthttp.ReleaseRequest(req)
-	res := fasthttp.AcquireResponse()
-	defer fasthttp.ReleaseResponse(res)
-
-	req.Header.SetMethod(method)
-	req.Header.Set("Authorization", "Bearer "+flyApiToken)
-	req.Header.Set("Content-Type", "application/json")
-
-	// Add URL to the request
-	req.SetRequestURI(url)
-
-	if body != nil {
-		jsonBody, _ := json.Marshal(body)
-		req.SetBody(jsonBody)
-	}
-
-	client := &fasthttp.Client{}
-	err := client.Do(req, res)
-	if err != nil {
-		return nil, err
-	}
-
-	var responseData map[string]interface{}
-	json.Unmarshal(res.Body(), &responseData)
-	return responseData, nil
 }
 
 func storeSecretFirebaseCredsAsFile() (string, error) {
@@ -260,7 +88,7 @@ func storeSecretFirebaseCredsAsFile() (string, error) {
 
 	// Save as a JSON file
 	filePath := "/tmp/" + os.Getenv("FILE_FIREBASE_CREDENTIALS")
-	err = os.WriteFile(filePath, decoded, 0644)
+	err = os.WriteFile(filePath, decoded, 0600)
 	if err != nil {
 		fmt.Println("Error writing Firebase credentials file:", err)
 		return "", fmt.Errorf("Error writing Firebase credentials file: %v", err)
@@ -270,10 +98,6 @@ func storeSecretFirebaseCredsAsFile() (string, error) {
 
 	return filePath, nil
 
-}
-
-func Welcome(c *fiber.Ctx) error {
-	return c.SendString("Welcome to the Deploy4Scrap API!")
 }
 
 func main() {
@@ -293,54 +117,13 @@ func main() {
 		Views:          engine,          // Set View Engine
 	})
 
-	// * Serve static images from a specific directory
-	// * Static Files Handler
+	// Initialize Handlers
+	handler := handlers.NewHandlers(flyApiToken, flyApiUrl, flyApp)
 
-	// Access file "image.png" under `static/` directory via URL: `http://<server>/assets/image.png`.
-	// Without `PathPrefix`, you have to access it via URL:
-	// `http://<server>/assets/static/image.png`. Or extend your config for customization
-
-	app.Use("/assets", filesystem.New(filesystem.Config{
-		Root:         http.Dir("./assets"),
-		Browse:       false,
-		Index:        "views/index.html",
-		NotFoundFile: "views/404.html",
-		MaxAge:       3600,
-	}))
-
-	app.Use(favicon.New(favicon.Config{
-		File: "./favicon.ico",
-		URL:  "/favicon.ico",
-	}))
-
-	// Initialize Prometheus
-	prometheus := fiberprometheus.New("Deploy4Scrap")
-	prometheus.RegisterAt(app, "/metrics")
-	// prometheus.SetSkipPaths([]string{"/ping"}) // Optional: Remove some paths from metrics
-
-	// Initialize the Prometheus middleware
-	app.Use(prometheus.Middleware)
-
-	// Provide a minimal config
-	app.Use(healthcheck.New())
-
-	// Initialize default config
-	app.Use(handlers.Limiter())
-
-	// Routes that don't require authentication
-	app.Get("/", Welcome)
-
-	// Start Metrics server
-	app.Get("/metricsgraph", monitor.New(monitor.Config{Title: "Deploy4Scrap Metrics Page"}))
-
-	// Create a group for authenticated routes
-	authedApp := app.Group("/api", authMiddleware)
-
-	authedApp.Post("/deploy", deployMachine)
-	authedApp.Put("/machine/:id/start", startMachine)
-	authedApp.Put("/machine/:id/stop", stopMachine)
-	authedApp.Delete("/machine/:id", deleteMachine)
-	// authedApp.Post("/execute-task/:machine_id", executeTask)
+	// Setup routes
+	router.SetupRoutes(app, handler, FirebaseApp)
+	// Setup Non-Accessible routes
+	router.SetupNonAccessibleRoutes(app)
 
 	// listener, err := reuseport.Listen("tcp4", "0.0.0.0"+addr)
 	// if err != nil {
