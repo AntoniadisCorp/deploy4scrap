@@ -46,18 +46,18 @@ type = 'connections' # Scale based on concurrent connections
 hard_limit = 200     # Max connections per Machine before rejection
 soft_limit = 150     # Target connections before routing to other Machines
 
-[[services]]
-protocol = 'tcp'
-internal_port = 9090
+# [[services]]
+# protocol = 'tcp'
+# internal_port = 9090
 
-[[services.ports]]
-port = 9090
-handlers = ['http']
+# [[services.ports]]
+# port = 9090
+# handlers = ['http']
 
-[services.concurrency]
-type = "connections"
-hard_limit = 25
-soft_limit = 20
+# [services.concurrency]
+# type = "connections"
+# hard_limit = 25
+# soft_limit = 20
 
 [[vm]]
 memory = "512mb"
@@ -65,7 +65,6 @@ cpu_kind = 'shared'
 cpus = 2
 
 
-[[metrics]]
-port = 9090
+[metrics]
+port = 8080
 path = '/metrics'
-https = false

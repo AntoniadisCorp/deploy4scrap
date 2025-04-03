@@ -34,6 +34,7 @@ WORKDIR /app
 
 # Copy the binary from the builder stage
 # COPY --from=builder /app/.env .env
+COPY --from=builder /app/favicon.ico favicon.ico
 COPY --from=builder /app/main /app/main
 
 # Add packages

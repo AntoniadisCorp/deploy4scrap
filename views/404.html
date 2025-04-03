@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>{{.Code}} {{ .Message }}</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f0f0f0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        inset: 0;
+        margin: 0;
+      }
+      .container {
+        width: 80%;
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        padding: 2rem;
+        max-width: 500px;
+        margin: 40px auto;
+        text-align: center;
+      }
+      .container img {
+        width: 100px;
+        height: 100px;
+        margin: 20px auto;
+        border-radius: 50%;
+      }
+      .container h1 {
+        font-size: 36px;
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 1rem;
+      }
+      .container p {
+        font-size: 18px;
+        color: #666;
+        margin-bottom: 20px;
+      }
+      .container a {
+        font-size: 18px;
+        color: #337ab7;
+        text-decoration: none;
+      }
+
+      .error-details {
+        background-color: #f9f9f9;
+        border-radius: 4px;
+        padding: 1rem;
+        margin-top: 1rem;
+        font-family: monospace;
+        text-align: left;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <img
+        src="{{.SubDomainHost}}/assets/brandname.jpg"
+        alt="{{.Code}} {{ .Message }}"
+      />
+      <h1>{{.Code}} {{ .Message }}</h1>
+
+      <p>Oops! The page you're looking for doesn't exist.</p>
+      <p>{{ .Errors.Message }}</p>
+      <div class="error-details">
+        <strong>Error code:</strong> {{ .Errors.Code }}
+      </div>
+      <br />
+      <a href="{{.DomainHost}}">Go Back to the Home page</a>
+    </div>
+  </body>
+</html>

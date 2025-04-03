@@ -5,20 +5,25 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/AntoniadisCorp/deploy4scrap/handlers"
+	"github.com/ansrivas/fiberprometheus/v2"
 	"github.com/goccy/go-json"
 
 	firebase "firebase.google.com/go"
 	"firebase.google.com/go/auth"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/favicon"
+	"github.com/gofiber/fiber/v2/middleware/filesystem"
 	"github.com/gofiber/fiber/v2/middleware/healthcheck"
-	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/monitor"
+	"github.com/gofiber/template/html/v2"
 	"github.com/joho/godotenv"
 	"github.com/valyala/fasthttp"
 	"go.uber.org/zap"
@@ -72,9 +77,9 @@ func init() {
 func authMiddleware(c *fiber.Ctx) error {
 
 	// Ignore authentication for / and /metrics paths
-	if c.Path() == "/" || c.Path() == "/metrics" {
-		return c.Next()
-	}
+	// if c.Path() == "/" || c.Path() == "/metrics" || c.Path() == "/health" || c.Path() == "/metricsgraph" {
+	// 	return c.Next()
+	// }
 
 	token := c.Get("Authorization")
 
@@ -272,6 +277,9 @@ func Welcome(c *fiber.Ctx) error {
 }
 
 func main() {
+	// Initialize standard Go html template engine
+	engine := html.New("./views", ".html")
+
 	app := fiber.New(fiber.Config{
 		Prefork: true, // Enable prefork mode for better performance
 		// Concurrency:    100,  // Set the desired concurrency level
@@ -282,17 +290,51 @@ func main() {
 		IdleTimeout:    60 * time.Second,
 		BodyLimit:      4 * 1024 * 1024, // 4 MB
 		ReadBufferSize: 16 * 1024,       // 16 KB, or // 4 KB
-		// Views:          engine,          // Set View Engine
+		Views:          engine,          // Set View Engine
 	})
+
+	// * Serve static images from a specific directory
+	// * Static Files Handler
+
+	// Access file "image.png" under `static/` directory via URL: `http://<server>/assets/image.png`.
+	// Without `PathPrefix`, you have to access it via URL:
+	// `http://<server>/assets/static/image.png`. Or extend your config for customization
+
+	app.Use("/assets", filesystem.New(filesystem.Config{
+		Root:         http.Dir("./assets"),
+		Browse:       false,
+		Index:        "views/index.html",
+		NotFoundFile: "views/404.html",
+		MaxAge:       3600,
+	}))
+
+	app.Use(favicon.New(favicon.Config{
+		File: "./favicon.ico",
+		URL:  "/favicon.ico",
+	}))
+
+	// Initialize Prometheus
+	prometheus := fiberprometheus.New("Deploy4Scrap")
+	prometheus.RegisterAt(app, "/metrics")
+	// prometheus.SetSkipPaths([]string{"/ping"}) // Optional: Remove some paths from metrics
+
+	// Initialize the Prometheus middleware
+	app.Use(prometheus.Middleware)
 
 	// Provide a minimal config
 	app.Use(healthcheck.New())
 
 	// Initialize default config
-	app.Use(limiter.New())
+	app.Use(handlers.Limiter())
+
+	// Routes that don't require authentication
+	app.Get("/", Welcome)
+
+	// Start Metrics server
+	app.Get("/metricsgraph", monitor.New(monitor.Config{Title: "Deploy4Scrap Metrics Page"}))
 
 	// Create a group for authenticated routes
-	authedApp := app.Group("/", authMiddleware)
+	authedApp := app.Group("/api", authMiddleware)
 
 	authedApp.Post("/deploy", deployMachine)
 	authedApp.Put("/machine/:id/start", startMachine)
@@ -300,17 +342,11 @@ func main() {
 	authedApp.Delete("/machine/:id", deleteMachine)
 	// authedApp.Post("/execute-task/:machine_id", executeTask)
 
-	// Routes that don't require authentication
-	app.Get("/", Welcome)
-
-	// Start Metrics server
-	app.Get("/metrics", monitor.New(monitor.Config{Title: "Deploy4Scrap Metrics Page"}))
-
-	/* listener, err := reuseport.Listen("tcp4", "0.0.0.0"+addr)
-	if err != nil {
-		log.Fatalf("Failed to listen on port 3401 with SO_REUSEPORT: %v", err)
-	}
-	defer listener.Close() */
+	// listener, err := reuseport.Listen("tcp4", "0.0.0.0"+addr)
+	// if err != nil {
+	// 	log.Fatalf("Failed to listen on port 3401 with SO_REUSEPORT: %v", err)
+	// }
+	// defer listener.Close()
 
 	// Graceful shutdown
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -320,20 +356,20 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
-	/* go fly.WalkResponse()
+	// go fly.WalkResponse()
 
 	// Start Metrics server
-	go func() {
-		slog.Info("serving metrics", slog.String("addr", addr))
-		http.Handle("/metrics", promhttp.Handler())
-		if err := http.Serve(listener, nil); err != nil {
-			log.Fatal(err)
-		}
-	}() */
+	// go func() {
+	// 	slog.Info("serving metrics", slog.String("addr", addr))
+	// 	// http.Handle("/metrics", prometheus.Middleware())
+	// 	// if err := http.Serve(listener, nil); err != nil {
+	// 	// 	log.Fatal(err)
+	// 	// }
+	// }()
 
 	// Start deploy4scrap MicroService
 	go func() {
-		log.Println("Starting deploy4scrap microservice on ", os.Getenv("PORT"))
+		log.Println("Starting deploy4scrap microservice on", os.Getenv("PORT"))
 		if err := app.Listen(":" + os.Getenv("PORT")); err != nil {
 			log.Fatal(err)
 		}
