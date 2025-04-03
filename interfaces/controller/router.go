@@ -127,7 +127,7 @@ func handleStatusNotFoundFailure() func(c *fiber.Ctx) error {
 
 	return func(c *fiber.Ctx) error {
 
-		if strings.Contains(c.Path(), ".js") || strings.Contains(c.Path(), ".css") ||
+		if c.Path() == "/" || strings.Contains(c.Path(), ".js") || strings.Contains(c.Path(), ".css") ||
 			strings.Contains(c.Path(), ".jpg") || strings.Contains(c.Path(), ".png") ||
 			strings.Contains(c.Path(), ".svg") || strings.Contains(c.Path(), ".ico") ||
 			strings.Contains(c.Path(), ".gif") || strings.Contains(c.Path(), ".jpeg") ||
@@ -143,12 +143,7 @@ func handleStatusNotFoundFailure() func(c *fiber.Ctx) error {
 			c.Type("json")
 			return c.Next()
 		}
-		if strings.HasPrefix(c.Path(), "/") {
-			c.Type("html")
-			return c.Next()
-		}
 
-		log.Printf("httpResponse.SubDomainHost: %s", string(c.Context().Host()))
 		// Render a 404 Not Found response
 		httpResponse := domain.HTTPResponse{
 			Code:    fiber.StatusNotFound,
