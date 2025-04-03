@@ -43,8 +43,8 @@ handlers = ['tls', 'http']
 
 [services.concurrency]
 type = 'connections' # Scale based on concurrent connections
-hard_limit = 200     # Max connections per Machine before rejection
-soft_limit = 150     # Target connections before routing to other Machines
+hard_limit = 150     # Max connections per Machine before rejection
+soft_limit = 100     # Target connections before routing to other Machines
 
 # [[services]]
 # protocol = 'tcp'
